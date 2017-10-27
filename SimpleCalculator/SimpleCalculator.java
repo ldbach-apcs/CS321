@@ -60,7 +60,7 @@ final class NextExprListRest extends ExprListRest {
 	}
 
 	void interpret() {
-		System.out.print(";");
+		System.out.print("; ");
 		System.out.print(e.interpret());
 		elr.interpret();
 	}
@@ -305,14 +305,17 @@ class Parser {
     private Factor parseFactor() throws SimpleCalculatorError {
         if(tok == Token.NUM) {
             int num = (Integer)lexer.attribute;
-            match(Token.NUM);
-            
+            match(Token.NUM);   
             return new NumFactor(num);
         } if (tok == Token.OPEN) {
 			match(Token.OPEN);
 			int num = parseExpr().interpret();
-			// int num = parseExprList();
 			match(Token.CLOSE);
+			return new NumFactor(num);
+		} if (tok == Token.ABS) {
+			match(Token.ABS);
+			int num = Math.abs(parseExpr().interpret());
+			match(Token.ABS);
 			return new NumFactor(num);
 		}
         else throw new ParseError("Token " + tok + " is invalid here");
@@ -330,6 +333,7 @@ enum Token {
 	OPEN("("),
 	CLOSE(")"),
 	BREAK(";"),
+	ABS("|"),
     EOF("eof");	// end of input
     
     private String name;
@@ -395,6 +399,8 @@ class Lexer {
 						return Token.CLOSE;
                     if (c == ';')
 						return Token.BREAK;
+					if (c == '|')
+						return Token.ABS;
 						
                     throw new LexicalError("Invalid character \'"  + c + "\'");
                 }
