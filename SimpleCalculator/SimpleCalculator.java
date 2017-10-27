@@ -51,6 +51,21 @@ final class EmptyExprListRest extends ExprListRest {
     }
 }
 
+final class NextExprListRest extends ExprListRest {
+	ExprListRest elr;
+	Expr e;
+	NextExprListRest(Expr e, ExprListRest elr) {
+		this.e = e;
+		this.elr = elr;
+	}
+
+	void interpret() {
+		System.out.print(";");
+		System.out.print(e.interpret());
+		elr.interpret();
+	}
+}
+
 // <expr>	-> <term> <exprrest>
 final class Expr {
     private Term t;
@@ -68,6 +83,7 @@ final class Expr {
 }
 
 // <exprrest>	-> + <term> <exprrest>
+//				-> - <term> <exprrest>
 //				-> empty
 abstract class ExprRest {
     abstract int interpret(int v);
@@ -86,6 +102,22 @@ final class PlusExprRest extends ExprRest {
         return er.interpret(val);
     }
 }
+final class MinusExprRest extends ExprRest {
+    private Term t;
+    private ExprRest er;
+    
+    MinusExprRest(Term t, ExprRest er) {
+        this.t = t;
+        this.er = er;
+    }
+    
+    int interpret(int v) {
+        int val = v - t.interpret();
+        return er.interpret(val);
+    }
+}
+
+
 final class EmptyExprRest extends ExprRest {
     EmptyExprRest() {
     }
@@ -96,7 +128,9 @@ final class EmptyExprRest extends ExprRest {
     }
 }
 
-// <term>	-> <factor> <termrest>
+// <term>	-> * <factor> <termrest>
+//			-> / <factor> <termrest>
+//			-> empty
 final class Term {
     private Factor f;
     private TermRest tr;
@@ -110,6 +144,36 @@ final class Term {
         int v = f.interpret();
         return tr.interpret(v);
     }
+}
+
+final class MultiTermRest extends TermRest{
+	private Factor f;
+	private TermRest tr;
+	
+	MultiTermRest(Factor f, TermRest tr) {
+		this.f = f;
+		this.tr = tr;
+	}
+	
+	int interpret(int v) {
+		int val = v * f.interpret();
+		return tr.interpret(val);
+	}
+}
+
+final class DivTermRest extends TermRest{
+	private Factor f;
+	private TermRest tr;
+	
+	DivTermRest(Factor f, TermRest tr) {
+		this.f = f;
+		this.tr = tr;
+	}
+	
+	int interpret(int v) {
+		int val = v / f.interpret();
+		return tr.interpret(val);
+	}
 }
 
 // <termrrest>	-> empty
@@ -181,7 +245,13 @@ class Parser {
     }
     // Parse ExprListRest
     private ExprListRest parseExprListRest() throws SimpleCalculatorError {
-        return new EmptyExprListRest();
+		if (tok == Token.BREAK) {
+			match(Token.BREAK);
+			Expr e = parseExpr();
+			//return new EmptyExprListRest();
+			return new NextExprListRest(e, parseExprListRest());
+		}
+        else return new EmptyExprListRest();
     }
     
     // Parse Expr
@@ -197,9 +267,15 @@ class Parser {
             match(Token.PLUS);
             Term t = parseTerm();
             ExprRest er = parseExprRest();
-            
             return new PlusExprRest(t, er);
-        } else return new EmptyExprRest();
+        }  else if (tok == Token.MINUS) {
+			match(Token.MINUS);
+			Term t = parseTerm();
+			ExprRest er = parseExprRest();
+			return new MinusExprRest(t, er);
+		}
+		
+		else return new EmptyExprRest();
     }
     
     // Parse Term
@@ -211,7 +287,18 @@ class Parser {
     }
     // Parse TermRest
     private TermRest parseTermRest() throws SimpleCalculatorError {
-        return new EmptyTermRest();
+		if (tok == Token.MULTI) {
+			match(Token.MULTI);
+			Factor f = parseFactor();
+			TermRest tr = parseTermRest();
+			return new MultiTermRest(f, tr);
+		} else if (tok == Token.DIV) {
+			match(Token.DIV);
+			Factor f = parseFactor();
+			TermRest tr = parseTermRest();
+			return new DivTermRest(f, tr);
+		}
+        else return new EmptyTermRest();
     }
     
     // Parse Factor
@@ -221,7 +308,13 @@ class Parser {
             match(Token.NUM);
             
             return new NumFactor(num);
-        }
+        } if (tok == Token.OPEN) {
+			match(Token.OPEN);
+			int num = parseExpr().interpret();
+			// int num = parseExprList();
+			match(Token.CLOSE);
+			return new NumFactor(num);
+		}
         else throw new ParseError("Token " + tok + " is invalid here");
     }
 }
@@ -231,6 +324,12 @@ enum Token {
     NUM("integer"),    // integer
     PLUS("+"),   // +
     STOP("."),
+	MINUS("-"),
+	DIV("/"),
+	MULTI("*"),
+	OPEN("("),
+	CLOSE(")"),
+	BREAK(";"),
     EOF("eof");	// end of input
     
     private String name;
@@ -282,9 +381,21 @@ class Lexer {
                 } else {
                     if(c == '+')
                         return Token.PLUS;
+					if (c == '-')
+						return Token.MINUS;
                     if(c == '.')
                         return Token.STOP;
-                    
+					if (c == '*')
+						return Token.MULTI;
+					if (c == '/')
+						return Token.DIV;
+					if (c == '(')
+						return Token.OPEN;
+					if (c == ')')
+						return Token.CLOSE;
+                    if (c == ';')
+						return Token.BREAK;
+						
                     throw new LexicalError("Invalid character \'"  + c + "\'");
                 }
             }
