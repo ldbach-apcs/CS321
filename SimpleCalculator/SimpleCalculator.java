@@ -88,6 +88,7 @@ final class Expr {
 abstract class ExprRest {
     abstract int interpret(int v);
 }
+
 final class PlusExprRest extends ExprRest {
     private Term t;
     private ExprRest er;
@@ -102,6 +103,7 @@ final class PlusExprRest extends ExprRest {
         return er.interpret(val);
     }
 }
+
 final class MinusExprRest extends ExprRest {
     private Term t;
     private ExprRest er;
@@ -116,7 +118,6 @@ final class MinusExprRest extends ExprRest {
         return er.interpret(val);
     }
 }
-
 
 final class EmptyExprRest extends ExprRest {
     EmptyExprRest() {
@@ -204,6 +205,21 @@ final class NumFactor extends Factor {
     int interpret() {
         return num;
     }
+}
+
+// <factor> -> num ^ <expr>
+final class ExpoFactor extends Factor {
+	private int prevNum;
+	private Factor factor;
+	
+	ExpoFactor(int prevNum, Factor factor) {
+		this.prevNum = prevNum;
+		this.factor = factor;
+	}
+	
+	int interpret() {
+		return (int) Math.pow(prevNum, factor.interpret());
+	}
 }
 
 /* -------------------------- Predict Top Down Parser -------------------------- */
@@ -305,18 +321,27 @@ class Parser {
     private Factor parseFactor() throws SimpleCalculatorError {
         if(tok == Token.NUM) {
             int num = (Integer)lexer.attribute;
-            match(Token.NUM);   
-            return new NumFactor(num);
+            match(Token.NUM); 
+            if (tok == Token.EXPO) {
+    			match(Token.EXPO);
+    			return new ExpoFactor(num, parseFactor());
+    		} else return new NumFactor(num);
         } if (tok == Token.OPEN) {
 			match(Token.OPEN);
 			int num = parseExpr().interpret();
 			match(Token.CLOSE);
-			return new NumFactor(num);
+			if (tok == Token.EXPO) {
+    			match(Token.EXPO);
+    			return new ExpoFactor(num, parseFactor());
+    		} else return new NumFactor(num);
 		} if (tok == Token.ABS) {
 			match(Token.ABS);
 			int num = Math.abs(parseExpr().interpret());
 			match(Token.ABS);
-			return new NumFactor(num);
+			if (tok == Token.EXPO) {
+    			match(Token.EXPO);
+    			return new ExpoFactor(num, parseFactor());
+    		} else return new NumFactor(num);
 		}
         else throw new ParseError("Token " + tok + " is invalid here");
     }
@@ -334,6 +359,7 @@ enum Token {
 	CLOSE(")"),
 	BREAK(";"),
 	ABS("|"),
+	EXPO("^"),
     EOF("eof");	// end of input
     
     private String name;
@@ -401,6 +427,8 @@ class Lexer {
 						return Token.BREAK;
 					if (c == '|')
 						return Token.ABS;
+					if (c == '^')
+						return Token.EXPO;
 						
                     throw new LexicalError("Invalid character \'"  + c + "\'");
                 }
